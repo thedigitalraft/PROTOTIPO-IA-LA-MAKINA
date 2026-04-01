@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+
+  <div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:flex-start;">
+    <div>
+      <a href="/" style="font-size:12px; color:var(--muted);">← Todos los pedidos</a>
+      <h1 style="font-size:20px; font-weight:bold; margin-top:0.5rem;">{{ req.cliente }} — {{ req.tipo }}</h1>
+      <div style="font-size:12px; color:var(--muted); margin-top:3px;">Recibido: {{ req.created_at[:16] }} · Deadline: {{ req.deadline or 'No especificado' }}</div>
+    </div>
+    {% set status_class = {
+      'Recibido': 'badge-recibido',
+      'En espera de respuesta': 'badge-espera',
+      'Ya hemos comenzado': 'badge-comenzado',
+      'En revisión': 'badge-revision',
+      'Entregado': 'badge-entregado'
+    }.get(req.status, 'badge-recibido') %}
+    <span class="badge {{ status_class }}" style="font-size:13px; padding:4px 12px;">{{ req.status }}</span>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 320px; gap:1.5rem; align-items:start;">
+
+    <div>
+      <!-- BRIEF -->
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1rem 1.25rem; margin-bottom:1rem;">
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Brief original</div>
+        <p style="font-size:14px; line-height:1.7;">{{ req.brief }}</p>
+      </div>
+
+      <!-- STATUS UPDATE -->
+      <details style="margin-bottom:1rem;">
+        <summary style="font-size:12px; color:var(--muted); cursor:pointer; padding:4px 0;">Cambiar estado</summary>
+        <form method="POST" action="/request/{{ req.id }}/status" style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+          <select name="status" style="font-size:13px;">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if s == req.status %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-sm">Actualizar</button>
+        </form>
+      </details>
+
+      <hr class="divider">
+
+      <!-- THREAD -->
+      <div style="margin-bottom:1rem;">
+        <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:12px;">Hilo del pedido</div>
+
+        {% for msg in msgs %}
+        <div style="display:flex; gap:10px; padding:12px 0; border-bottom:1px solid var(--border);">
+          <div style="width:32px; height:32px; border-radius:50%; background:{% if msg.es_ia %}#1a3a6b{% elif msg.rol == 'cliente' %}#f0ede8{% else %}#e8edf0{% endif %}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; color:{% if msg.es_ia %}#eef4ff{% elif msg.rol == 'cliente' %}#4a3a28{% else %}#283a4a{% endif %}; flex-shrink:0; margin-top:2px;">
+            {{ msg.autor[:2].upper() }}
+          </div>
+          <div style="flex:1;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+              <span style="font-size:13px; font-weight:bold;">{{ msg.autor }}</span>
+              {% if msg.es_ia %}<span class="badge badge-revision" style="font-size:10px;">IA</span>{% endif %}
+              {% if msg.es_interno %}<span style="font-size:10px; padding:2px 7px; background:var(--warn-bg); color:var(--warn-text); border-radius:2px;">Interno</span>{% endif %}
+              <span style="font-size:11px; color:var(--muted);">{{ msg.created_at[11:16] }} · {{ msg.created_at[:10] }}</span>
+            </div>
+            <div style="font-size:14px; line-height:1.7; {% if msg.es_ia %}color:var(--ia-text);{% endif %}">{{ msg.contenido }}</div>
+          </div>
+        </div>
+        {% endfor %}
+
+        {% if not msgs %}
+        <p style="color:var(--muted); font-size:13px; padding:1rem 0;">Sin mensajes todavía.</p>
+        {% endif %}
+      </div>
+
+      <!-- COMPOSE -->
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1rem 1.25rem;">
+        <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;">Nuevo mensaje</div>
+        <form method="POST" action="/request/{{ req.id }}/mensaje">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Tu nombre</label>
+              <input type="text" name="autor" placeholder="Ej: Phiyl Häner" required>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Rol</label>
+              <select name="rol">
+                <option value="equipo">Equipo La Mákina</option>
+                <option value="cliente">Cliente</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:10px;">
+            <label>Mensaje</label>
+            <textarea name="contenido" rows="3" placeholder="Escribe tu mensaje..." required></textarea>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="text-transform:none; font-size:13px; display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" name="es_interno" value="1" style="width:auto;"> Comentario interno
+            </label>
+            <button type="submit" class="btn btn-primary">Enviar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- SIDEBAR IA -->
+    <div>
+      {% if analysis %}
+      <div class="ia-block" style="margin-bottom:1rem;">
+        <div class="ia-header"><div class="ia-dot"></div> Análisis del brief</div>
+
+        {% if analysis.resumen %}
+        <p style="font-size:13px; color:var(--ia-text); margin-bottom:10px; font-style:italic;">"{{ analysis.resumen }}"</p>
+        {% endif %}
+
+        {% if analysis.riesgo %}
+        <div style="margin-bottom:10px;">
+          <span style="font-size:11px; color:var(--muted);">Riesgo: </span>
+          <span class="badge badge-riesgo-{{ analysis.riesgo }}">{{ analysis.riesgo|upper }}</span>
+        </div>
+        {% endif %}
+
+        {% if analysis.problemas %}
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Gaps detectados</div>
+          {% for p in analysis.problemas %}
+          <div style="display:flex; gap:6px; align-items:flex-start; margin-bottom:6px; background:white; border:1px solid var(--ia-border); border-radius:3px; padding:7px 10px;">
+            <span style="color:#c47a00; font-size:13px; flex-shrink:0;">!</span>
+            <span style="font-size:13px; color:var(--text);">{{ p }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if analysis.preguntas_cliente %}
+        <div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Preguntas sugeridas al cliente</div>
+          {% for q in analysis.preguntas_cliente %}
+          <div style="font-size:13px; color:var(--ia-text); padding:5px 0; border-bottom:1px solid var(--ia-border);">→ {{ q }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- IA ASSISTANT DURANTE PRODUCCIÓN -->
+      <div class="ia-block">
+        <div class="ia-header"><div class="ia-dot"></div> Asistente de producción</div>
+        <p style="font-size:12px; color:var(--ia-text); margin-bottom:10px;">Pregunta algo sobre este pedido. La IA tiene contexto del brief y del hilo completo.</p>
+
+        <textarea id="ia-pregunta" rows="3" placeholder="Ej: ¿Cómo le pido al cliente que suba el video original sin sonar brusco?" style="font-size:13px; border:1px solid var(--ia-border); background:white; border-radius:3px; padding:8px; width:100%; font-family:inherit; resize:vertical;"></textarea>
+
+        <button onclick="consultarIA()" class="btn btn-primary" style="width:100%; margin-top:8px; font-size:13px;" id="btn-ia">Consultar IA →</button>
+
+        <div id="ia-respuesta" style="display:none; margin-top:12px; background:white; border:1px solid var(--ia-border); border-radius:3px; padding:10px;">
+          <div style="font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em;">Respuesta IA</div>
+          <div id="ia-texto" style="font-size:13px; color:var(--ia-text); line-height:1.7; white-space:pre-wrap;"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+async function consultarIA() {
+  const pregunta = document.getElementById('ia-pregunta').value.trim();
+  if (!pregunta) return;
+  const btn = document.getElementById('btn-ia');
+  btn.textContent = 'Consultando...';
+  btn.disabled = true;
+  const resp = document.getElementById('ia-respuesta');
+  const texto = document.getElementById('ia-texto');
+  resp.style.display = 'block';
+  texto.textContent = '';
+
+  try {
+    const url = `/request/{{ req.id }}/ia-stream?pregunta=${encodeURIComponent(pregunta)}`;
+    const response = await fetch(url);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.text) texto.textContent += parsed.text;
+          } catch(e) {
+            if (data && !data.startsWith('{')) texto.textContent += data;
+          }
+        }
+      }
+    }
+  } catch(e) {
+    texto.textContent = 'Error conectando con la IA. Verifica la configuración.';
+  }
+
+  btn.textContent = 'Consultar IA →';
+  btn.disabled = false;
+}
+
+document.getElementById('ia-pregunta').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && e.metaKey) consultarIA();
+});
+</script>
+{% endblock %}
