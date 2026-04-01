@@ -14,7 +14,7 @@ import asyncio
 DB_PATH = os.environ.get("DB_PATH", "/data/lamakina.db")
 TOGETHER_API_KEY = os.environ.get("TOGETHER_API_KEY", "")
 TOGETHER_MODEL = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"
-TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
+TOGETHER_API_URL = "https://api.together.ai/v1/chat/completions"
 
 def get_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
